@@ -193,6 +193,18 @@
             content: '🎵';
         }
 
+        /* IFrame Container for YouTube (Hidden) */
+        #youtube-player-container {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .key-hints {
             display: flex;
             gap: 15px;
@@ -314,6 +326,11 @@
             <!-- Bottoni generati dinamicamente dal JS -->
         </div>
 
+        <!-- Container for YouTube IFrame API -->
+        <div id="youtube-player-container">
+            <div id="youtube-player"></div>
+        </div>
+
         <div class="ui-layer">
             <div class="top-bar">
                 <div class="score-box brand-font">
@@ -366,12 +383,12 @@
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
 
-        // Configurazione Canzoni (Devono trovarsi nella cartella "audio" su GitHub)
+        // Configurazione Canzoni (Devono trovarsi su YouTube)
         const SONGS = [
-            { id: 'money', title: 'MONEYMONEYMONEY', path: 'audio/MONEYMONEYMONEY.mp3' },
-            { id: 'go', title: 'GO!', path: 'audio/go.mp3' },
+            { id: 'money', title: 'MONEYMONEYMONEY', videoId: '7Ji4P64Emas' },
+            { id: 'go', title: 'GO!', videoId: 'byO62Plxt-M' },
         ];
-        let currentSongPath = SONGS[0].path; // Predefinita la prima
+        let currentSongVideoId = SONGS[0].videoId; // Predefinita la prima
 
         // Difficoltà Settings
         const DIFFICULTIES = {
@@ -402,12 +419,14 @@
         const noteHeight = 20;
         let noteSpeed = 0;
 
-        // Web Audio API State
+        // Web Audio API & YouTube API State
         let audioCtx;
         let audioSource;
         let analyser;
         let delayNode;
-        let audioDataBuffer = null; // Buffer per i dati audio raw (Fix per iOS/Safari)
+        let mediaElementSource = null;
+        let ytPlayer = null;
+        let isYtApiLoaded = false;
         
         let lastSpawnTime = 0;
         let beatThreshold = DIFFICULTIES[currentDiff].threshold; 
@@ -442,33 +461,93 @@
         }
         window.addEventListener('resize', resize);
 
-        async function initAudio() {
-            // Inizializza Audio Context
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Inizializza l'API di YouTube
+        function initYouTubeAPI() {
+            const tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+
+        window.onYouTubeIframeAPIReady = function() {
+            isYtApiLoaded = true;
+        };
+
+        function setupAudioFromYouTube() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            // Distruggi il player precedente se esiste
+            if (ytPlayer) {
+                ytPlayer.destroy();
+                mediaElementSource = null;
+            }
+
+            return new Promise((resolve, reject) => {
+                ytPlayer = new YT.Player('youtube-player', {
+                    height: '200',
+                    width: '200',
+                    videoId: currentSongVideoId,
+                    playerVars: {
+                        'playsinline': 1,
+                        'controls': 0,
+                        'disablekb': 1,
+                        'fs': 0,
+                        'modestbranding': 1,
+                        'rel': 0,
+                        'showinfo': 0
+                    },
+                    events: {
+                        'onReady': (event) => onPlayerReady(event, resolve),
+                        'onStateChange': onPlayerStateChange,
+                        'onError': (e) => reject("Errore caricamento video YouTube.")
+                    }
+                });
+            });
+        }
+
+        function onPlayerReady(event, resolve) {
+            // Estrai l'audio dall'iframe di YouTube usando Web Audio API
+            const iframe = document.getElementById('youtube-player');
             
-            // Decodifica i dati audio (questo funziona sempre su tutti i browser)
-            const audioBuffer = await audioCtx.decodeAudioData(audioDataBuffer.slice(0));
+            // NOTA IMPORTANTE: A causa delle restrizioni CORS (Cross-Origin Resource Sharing)
+            // dei browser moderni, NON è possibile estrarre direttamente l'audio
+            // da un iframe di YouTube per analizzarlo con l'AnalyserNode.
+            // Il browser bloccherà la lettura dei dati audio per motivi di sicurezza.
             
-            audioSource = audioCtx.createBufferSource();
-            audioSource.buffer = audioBuffer;
-            
-            // Crea l'Analizzatore per estrarre le frequenze
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256; 
-            
-            delayNode = audioCtx.createDelay(5.0);
-            delayNode.delayTime.value = fallTimeSeconds;
-            
-            audioSource.connect(analyser);
-            analyser.connect(delayNode);
-            delayNode.connect(audioCtx.destination);
-            
-            audioSource.onended = () => {
+            // Per aggirare questo blocco e far funzionare il gioco, dovremo usare
+            // un "Fake Analyser" che genera impulsi ritmici artificiali,
+            // sincronizzati con la riproduzione del video. Non sarà perfetto
+            // come l'analisi reale dell'MP3, ma ci permette di giocare con i brani di YouTube.
+
+            resolve();
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
                 endGame();
-            };
-            
-            // Avvia la riproduzione
-            audioSource.start(0);
+            }
+        }
+
+        // Funzione per generare beat artificiali se l'audio reale è bloccato
+        let fakeTime = 0;
+        function getFakeAudioData(dataArray, bpm) {
+             const bps = bpm / 60; // Battiti al secondo
+             const beatInterval = 1 / bps; // Intervallo tra i battiti in secondi
+             
+             fakeTime += 1/60; // Assumendo 60fps
+             
+             // Genera un picco finto ogni 'beatInterval' secondi
+             if (fakeTime % beatInterval < 0.1) {
+                  // Simula un forte picco di bassi
+                  for(let i=0; i<dataArray.length; i++) dataArray[i] = 0;
+                  dataArray[1] = 250;
+                  dataArray[2] = 240;
+             } else {
+                  // Rumore di fondo
+                  for(let i=0; i<dataArray.length; i++) dataArray[i] = Math.random() * 50;
+             }
         }
 
         class Note {
@@ -562,11 +641,17 @@
         }
 
         function analyzeAudioAndSpawn() {
-            if(!analyser) return;
-
-            const bufferLength = analyser.frequencyBinCount;
+            // Poiché l'audio di YouTube è protetto da CORS, usiamo il Fake Analyser
+            // basato su un BPM approssimativo (es. 120 per MONEYMONEYMONEY)
+            const bufferLength = 256;
             const dataArray = new Uint8Array(bufferLength);
-            analyser.getByteFrequencyData(dataArray);
+            
+            if (ytPlayer && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+                 // Sostituisci 120 con il vero BPM se lo conosci
+                 getFakeAudioData(dataArray, 120); 
+            } else {
+                 return; // Non spawnare se il video è in pausa
+            }
 
             // Analizziamo i bassi (frequenze basse, i primi bin dell'array)
             let bassSum = 0;
@@ -576,7 +661,9 @@
             }
             let bassAvg = bassSum / 5;
 
-            let now = audioCtx.currentTime;
+            // Usa performance.now() invece di audioCtx.currentTime poiché non stiamo
+            // più usando direttamente l'AudioContext per la riproduzione
+            let now = performance.now() / 1000; 
             
             // Se l'energia dei bassi supera la soglia e è passato il cooldown
             if (bassAvg > beatThreshold && now - lastSpawnTime > spawnCooldown) {
@@ -738,22 +825,34 @@
         }
 
         startBtn.addEventListener('click', async () => {
-            if (!currentSongPath) return;
+            if (!currentSongVideoId) return;
+            
+            if (!isYtApiLoaded) {
+                 alert("API di YouTube non ancora caricata. Riprova tra un istante.");
+                 return;
+            }
+
+            // --- FIX PER IPHONE / IOS ---
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            // ----------------------------
             
             startBtn.disabled = true;
-            startBtn.innerText = "Scaricamento Traccia...";
+            startBtn.innerText = "Caricamento Traccia...";
             startBtn.style.borderColor = "#555";
             startBtn.style.boxShadow = "none";
             
             try {
-                // 1. Scarica il file audio dal tuo server (GitHub)
-                const response = await fetch(currentSongPath);
-                if (!response.ok) throw new Error("Canzone non trovata sul server!");
-                audioDataBuffer = await response.arrayBuffer();
-
-                // 2. Prepara l'audio
+                // 1. Prepara il player YouTube
                 startBtn.innerText = "Preparazione Motore...";
-                await initAudio();
+                await setupAudioFromYouTube();
+                
+                // 2. Avvia la riproduzione (richiede interazione utente)
+                ytPlayer.playVideo();
                 
                 // 3. Avvia gioco
                 startScreen.classList.add('hidden');
@@ -766,7 +865,7 @@
                 requestAnimationFrame(gameLoop);
             } catch (err) {
                 console.error(err);
-                alert("Errore caricamento: " + err.message + "\nAssicurati che la cartella 'audio' esista e i nomi siano corretti.");
+                alert("Errore caricamento: " + err);
                 startBtn.disabled = false;
                 startBtn.innerText = "Riprova Show";
                 startBtn.style.borderColor = "var(--neon-cyan)";
@@ -775,7 +874,7 @@
 
         function endGame() {
             isPlaying = false;
-            if(audioSource) audioSource.stop();
+            if(ytPlayer) ytPlayer.stopVideo();
             startScreen.querySelector('h1').innerText = "LIVE FINITO";
             startScreen.querySelector('.subtitle').innerText = `Score Finale: ${score}`;
             startBtn.innerText = "Gioca di nuovo";
@@ -850,7 +949,7 @@
                 btn.addEventListener('click', () => {
                     document.querySelectorAll('.song-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    currentSongPath = song.path;
+                    currentSongVideoId = song.videoId;
                 });
                 
                 container.appendChild(btn);
@@ -867,6 +966,9 @@
             const laneIndex = activeKeys.indexOf(e.key.toLowerCase());
             if (laneIndex !== -1) handleInput(laneIndex);
         });
+
+        // Carica lo script di YouTube all'avvio
+        initYouTubeAPI();
 
     </script>
 </body>
