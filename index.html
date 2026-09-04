@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Cortis Beat Drop</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
@@ -121,7 +121,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(10, 10, 15, 0.95);
+            background: rgba(10, 10, 15, 0.96);
             backdrop-filter: blur(10px);
             display: flex;
             flex-direction: column;
@@ -157,7 +157,6 @@
             text-transform: uppercase;
         }
 
-        /* Song Selector */
         .song-selector {
             display: flex;
             flex-direction: column;
@@ -187,7 +186,6 @@
             box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
         }
 
-        /* Difficulty Selector */
         .diff-selector {
             display: flex;
             gap: 8px;
@@ -237,13 +235,12 @@
             transform: scale(1.05);
         }
 
-        /* Tasti a schermo per mobile posizionati al di sopra della safe area */
         .mobile-controls {
             position: absolute;
-            bottom: 15px;
+            bottom: 10px;
             left: 10px;
             right: 10px;
-            height: 120px;
+            height: 110px;
             display: flex;
             gap: 8px;
             pointer-events: all;
@@ -268,7 +265,7 @@
         }
         
         .lane-btn:active, .lane-btn.touched {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.2);
             border-color: #fff;
             color: #fff;
         }
@@ -277,15 +274,10 @@
 <body>
 
     <div id="game-container">
-        <!-- Canvas per il gioco -->
         <canvas id="gameCanvas"></canvas>
 
-        <!-- Controlli Touch visibili e sicuri per mobile -->
-        <div class="mobile-controls" id="touch-controls">
-            <!-- Generati dinamicamente dal JS in base alle corsie -->
-        </div>
+        <div class="mobile-controls" id="touch-controls"></div>
 
-        <!-- UI di Gioco -->
         <div class="ui-layer">
             <div class="top-bar">
                 <div class="score-box brand-font">
@@ -299,15 +291,12 @@
             </div>
         </div>
 
-        <!-- Schermata di Avvio / Selezione Canzone -->
         <div class="overlay-screen" id="start-screen">
             <h1 class="brand-font">CORTIS</h1>
-            <div class="subtitle brand-font">Beat Drop</div>
+            <div class="subtitle">Beat Drop</div>
             
             <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 8px; font-family: 'Orbitron'; text-transform: uppercase;">Seleziona Canzone</div>
-            <div class="song-selector" id="song-selector">
-                <!-- Canzoni inserite da JS -->
-            </div>
+            <div class="song-selector" id="song-selector"></div>
 
             <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 8px; font-family: 'Orbitron'; text-transform: uppercase;">Difficoltà</div>
             <div class="diff-selector" id="diff-selector">
@@ -320,6 +309,9 @@
         </div>
     </div>
 
+    <!-- Elemento Audio Standard compatibile al 100% con iPhone -->
+    <audio id="bgAudio" preload="auto"></audio>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -328,19 +320,18 @@
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
         const touchControlsContainer = document.getElementById('touch-controls');
+        const audioElement = document.getElementById('bgAudio');
 
-        // Configurazione Canzoni locali (cartella 'audio' su GitHub)
         const SONGS = [
             { id: 'money', title: 'MONEYMONEYMONEY', url: 'audio/MONEYMONEYMONEY.mp3' },
-            { id: 'go', title: 'GO!', url: 'audio/GO.mp3' }
+            { id: 'go', title: 'GO!', url: 'audio/go.mp3' }
         ];
         let currentSongUrl = SONGS[0].url;
 
-        // Configurazioni Difficoltà
         const DIFFICULTIES = {
-            easy: { lanes: 2, threshold: 45, cooldown: 0.4 },
-            normal: { lanes: 3, threshold: 38, cooldown: 0.3 },
-            hard: { lanes: 4, threshold: 30, cooldown: 0.2 }
+            easy: { lanes: 2, interval: 700 },
+            normal: { lanes: 3, interval: 500 },
+            hard: { lanes: 4, interval: 380 }
         };
         let currentDiff = 'normal';
 
@@ -350,9 +341,8 @@
         let numLanes = 3;
         let laneWidth = 0;
         let hitZoneY = 0;
-        const hitZoneYOffset = 150; // Spazio in basso riservato ai bottoni
         const noteHeight = 22;
-        let fallTimeSeconds = 1.2; // Tempo in secondi che impiega la nota a cadere
+        let fallTimeSeconds = 1.2;
         let noteSpeed = 0;
 
         let isPlaying = false;
@@ -361,22 +351,14 @@
         let notes = [];
         let particles = [];
         let floatingTexts = [];
-
-        // Web Audio API State
-        let audioCtx;
-        let source;
-        let analyser;
-        let delayNode;
         
-        let lastSpawnTime = 0;
-        let beatThreshold = 38;
-        let spawnCooldown = 0.3;
+        let spawnTimer = 0;
+        let spawnInterval = 500;
 
         function updateDifficultySettings() {
             const config = DIFFICULTIES[currentDiff];
             numLanes = config.lanes;
-            beatThreshold = config.threshold;
-            spawnCooldown = config.cooldown;
+            spawnInterval = config.interval;
             buildTouchControls();
             resize();
         }
@@ -422,9 +404,9 @@
         function resize() {
             const container = document.getElementById('game-container');
             canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight - 120; // Sottrae lo spazio dei bottoni touch
+            canvas.height = container.clientHeight - 130; 
             laneWidth = canvas.width / numLanes;
-            hitZoneY = canvas.height - 40;
+            hitZoneY = canvas.height - 35;
             noteSpeed = (hitZoneY + noteHeight) / fallTimeSeconds;
         }
         window.addEventListener('resize', resize);
@@ -514,11 +496,11 @@
                 const distance = Math.abs(targetNote.y + (noteHeight / 2) - hitZoneY);
                 const hitCenter = targetNote.x + (laneWidth / 2);
                 
-                if (distance < 35) {
+                if (distance < 40) {
                     registerHit(targetNote, 100, "PERFECT!", COLORS[laneIndex]);
-                } else if (distance < 75) {
+                } else if (distance < 80) {
                     registerHit(targetNote, 50, "GOOD", "#fff");
-                } else if (distance < 110) {
+                } else if (distance < 120) {
                     combo = 0;
                     targetNote.active = false;
                     floatingTexts.push(new FloatingText("MISS", hitCenter, hitZoneY, "red"));
@@ -552,7 +534,12 @@
             const dt = timestamp - lastTime;
             lastTime = timestamp;
 
-            analyzeAudioAndSpawn();
+            spawnTimer += dt;
+            if (spawnTimer >= spawnInterval) {
+                const lane = Math.floor(Math.random() * numLanes);
+                notes.push(new Note(lane));
+                spawnTimer = 0;
+            }
 
             notes.forEach(note => note.update(dt));
             particles.forEach(p => p.update(dt));
@@ -572,11 +559,9 @@
             particles = particles.filter(p => p.life > 0);
             floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
-            // Rendering
-            ctx.fillStyle = 'rgba(10, 10, 15, 0.35)';
+            ctx.fillStyle = 'rgba(10, 10, 15, 0.4)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Griglia lane
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
             ctx.lineWidth = 1;
             for (let i = 1; i < numLanes; i++) {
@@ -586,7 +571,6 @@
                 ctx.stroke();
             }
 
-            // Hit Line
             ctx.beginPath();
             ctx.moveTo(0, hitZoneY);
             ctx.lineTo(canvas.width, hitZoneY);
@@ -604,93 +588,38 @@
             requestAnimationFrame(gameLoop);
         }
 
-        function analyzeAudioAndSpawn() {
-            if (!analyser || !isPlaying) return;
-
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            analyser.getByteFrequencyData(dataArray);
-
-            let bassSum = 0;
-            for (let i = 1; i <= 4; i++) {
-                bassSum += dataArray[i];
-            }
-            let bassAvg = bassSum / 4;
-
-            let now = audioCtx.currentTime;
-            if (bassAvg > beatThreshold && now - lastSpawnTime > spawnCooldown) {
-                const lane = Math.floor(Math.random() * numLanes);
-                notes.push(new Note(lane));
-                lastSpawnTime = now;
-            }
-        }
-
-        startBtn.addEventListener('click', async () => {
+        startBtn.addEventListener('click', () => {
             if (!currentSongUrl) return;
 
-            // Inizializzazione audio robusta per iOS / Safari
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-
             startBtn.disabled = true;
-            startBtn.innerText = "Scaricamento MP3...";
+            startBtn.innerText = "Caricamento...";
 
-            try {
-                const response = await fetch(currentSongUrl);
-                if (!response.ok) throw new Error("File MP3 non trovato su GitHub");
-                const arrayBuffer = await response.arrayBuffer();
+            // Sblocco audio nativo per iPhone
+            audioElement.src = currentSongUrl;
+            audioElement.load();
+            
+            audioElement.play().then(() => {
+                startScreen.classList.add('hidden');
+                score = 0; combo = 0; notes = []; particles = []; floatingTexts = [];
+                updateUI();
 
-                startBtn.innerText = "Avvio Show...";
+                isPlaying = true;
+                spawnTimer = 0;
+                lastTime = performance.now();
+                requestAnimationFrame(gameLoop);
 
-                audioCtx.decodeAudioData(arrayBuffer, (decodedData) => {
-                    source = audioCtx.createBufferSource();
-                    source.buffer = decodedData;
-
-                    analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 256;
-
-                    delayNode = audioCtx.createDelay(5.0);
-                    delayNode.delayTime.value = fallTimeSeconds;
-
-                    source.connect(analyser);
-                    analyser.connect(delayNode);
-                    delayNode.connect(audioCtx.destination);
-
-                    source.onended = endGame;
-
-                    startScreen.classList.add('hidden');
-                    score = 0; combo = 0; notes = []; particles = []; floatingTexts = [];
-                    updateUI();
-
-                    isPlaying = true;
-                    lastSpawnTime = audioCtx.currentTime;
-                    lastTime = performance.now();
-
-                    source.start(0);
-                    requestAnimationFrame(gameLoop);
-
-                }, (err) => {
-                    throw new Error("Errore decodifica audio");
-                });
-
-            } catch (err) {
+                audioElement.onended = endGame;
+            }).catch(err => {
                 console.error(err);
-                alert("Impossibile caricare il brano. Controlla che esista la cartella 'audio' su GitHub.");
+                alert("Impossibile riprodurre l'audio. Controlla il nome del file nella cartella audio su GitHub.");
                 startBtn.disabled = false;
-                startBtn.innerText = "Riprova Show";
-            }
+                startBtn.innerText = "Inizia Show";
+            });
         });
 
         function endGame() {
             isPlaying = false;
-            if (source) {
-                source.stop();
-                source.disconnect();
-            }
+            audioElement.pause();
             startScreen.querySelector('h1').innerText = "LIVE FINITO";
             startScreen.querySelector('.subtitle').innerText = `Score Finale: ${score}`;
             startBtn.innerText = "Gioca di nuovo";
@@ -698,7 +627,6 @@
             startScreen.classList.remove('hidden');
         }
 
-        // Selettori di Difficoltà
         document.querySelectorAll('.diff-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
@@ -708,7 +636,6 @@
             });
         });
 
-        // Input Tastiera Desktop
         window.addEventListener('keydown', (e) => {
             if (!isPlaying || e.repeat) return;
             const keyIndex = ACTIVE_KEYS.indexOf(e.key.toLowerCase());
@@ -717,9 +644,8 @@
             }
         });
 
-        // Setup iniziale
+        buildSongList();
         updateDifficultySettings();
-        songSelectorInit = buildSongList();
     </script>
 </body>
 </html>
