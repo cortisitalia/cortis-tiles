@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cortis Beat Drop - Auto Rhythm</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0a0a0f;
+            --neon-pink: #ff007f;
+            --neon-cyan: #00f3ff;
+            --neon-purple: #b026ff;
+            --neon-gold: #fbbf24;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            touch-action: none;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100dvh; /* Fix per le barre di navigazione su mobile */
+            width: 100vw;
+        }
+
+        .brand-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 100%;
+            background: linear-gradient(180deg, #111 0%, #000 100%);
+            box-shadow: 0 0 50px rgba(176, 38, 255, 0.2);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            z-index: 5;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .score-box, .combo-box {
+            background: rgba(20, 20, 31, 0.8);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            padding: 10px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+        }
+
+        .score-label, .combo-label {
+            font-size: 0.8rem;
+            color: var(--neon-cyan);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .score-value {
+            font-size: 2rem;
+            font-weight: 900;
+            text-shadow: 0 0 10px var(--neon-cyan);
+        }
+
+        .combo-box {
+            text-align: right;
+            border-color: rgba(255, 0, 127, 0.3);
+        }
+
+        .combo-value {
+            font-size: 3rem;
+            font-weight: 900;
+            color: var(--neon-pink);
+            text-shadow: 0 0 15px var(--neon-pink);
+            line-height: 1;
+        }
+
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 15, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: all;
+            z-index: 10;
+            transition: opacity 0.3s;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 5px;
+            background: linear-gradient(to right, var(--neon-pink), var(--neon-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(176, 38, 255, 0.5);
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--neon-purple);
+            letter-spacing: 4px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+        }
+
+        .song-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 25px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .song-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .song-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .song-btn.active {
+            background: rgba(176, 38, 255, 0.2);
+            border-color: var(--neon-purple);
+            color: var(--neon-purple);
+            box-shadow: 0 0 15px rgba(176, 38, 255, 0.3);
+        }
+        
+        .song-btn.active::after {
+            content: '🎵';
+        }
+
+        .key-hints {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+        
+        .key-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: 'Orbitron';
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .start-btn {
+            background: transparent;
+            color: #fff;
+            border: 2px solid var(--neon-pink);
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.3), inset 0 0 15px rgba(255, 0, 127, 0.1);
+        }
+
+        .start-btn:hover:not(:disabled) {
+            background: var(--neon-pink);
+            color: #fff;
+            box-shadow: 0 0 30px var(--neon-pink);
+            transform: scale(1.05);
+        }
+
+        .start-btn:disabled {
+            border-color: #555;
+            color: #555;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .difficulty-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .diff-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .diff-btn.active {
+            background: rgba(0, 243, 255, 0.2);
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+        }
+
+        .mobile-controls {
+            position: absolute;
+            bottom: max(30px, env(safe-area-inset-bottom)); /* Più in alto e safe-area per iOS */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 500px;
+            height: 80px;
+            display: flex;
+            gap: 10px;
+            pointer-events: all;
+            z-index: 6;
+        }
+        
+        .lane-btn {
+            flex: 1;
+            height: 100%;
+            background: rgba(20, 20, 31, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: all 0.1s;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .lane-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- Visualizer Canvas (Background) -->
+        <canvas id="bgCanvas"></canvas>
+        <!-- Game Canvas (Foreground) -->
+        <canvas id="gameCanvas"></canvas>
+
+        <div class="mobile-controls" id="touch-controls">
+            <!-- Bottoni generati dinamicamente dal JS -->
+        </div>
+
+        <div class="ui-layer">
+            <div class="top-bar">
+                <div class="score-box brand-font">
+                    <div class="score-label">Score</div>
+                    <div class="score-value" id="score">0</div>
+                </div>
+                <div class="combo-box brand-font">
+                    <div class="combo-value" id="combo">0</div>
+                    <div class="combo-label">COMBO</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schermata di Avvio con Upload Audio -->
+        <div class="overlay-screen" id="start-screen">
+            <h1 class="brand-font">CORTIS</h1>
+            <div class="subtitle brand-font">Auto-Rhythm Beat Drop</div>
+            
+            <div style="color: #aaa; margin-bottom: 20px; font-size: 0.9rem;">
+                Scegli la traccia da suonare!<br>L'IA creerà il livello a tempo di musica.
+            </div>
+
+            <div class="difficulty-selector">
+                <button class="diff-btn active" data-diff="easy">EASY (2 Tasti)</button>
+                <button class="diff-btn" data-diff="normal">NORMAL (3 Tasti)</button>
+                <button class="diff-btn" data-diff="hard">HARD (4 Tasti)</button>
+            </div>
+
+            <!-- Nuova Lista Canzoni -->
+            <div class="song-selector" id="song-list">
+                <!-- Generato dal JS -->
+            </div>
+
+            <div class="key-hints" id="key-hints-container">
+                <!-- Hint generati dinamicamente -->
+            </div>
+
+            <button class="start-btn brand-font" id="start-btn">Inizia Show</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        
+        const startScreen = document.getElementById('start-screen');
+        const startBtn = document.getElementById('start-btn');
+        const scoreEl = document.getElementById('score');
+        const comboEl = document.getElementById('combo');
+
+        // Configurazione Canzoni (Devono trovarsi nella cartella "audio" su GitHub)
+        const SONGS = [
+            { id: 'money', title: 'MONEY MONEY MONEY', path: 'audio/MONEYMONEYMONEY.mp3' },
+            { id: 'joyride', title: 'Joyride', path: 'audio/Joyride.mp3' },
+            { id: 'lullaby', title: 'Lullaby', path: 'audio/Lullaby.mp3' }
+        ];
+        let currentSongPath = SONGS[0].path; // Predefinita la prima
+
+        // Difficoltà Settings
+        const DIFFICULTIES = {
+            easy: { lanes: 2, keys: ['a', 'd'], colors: ['#ff007f', '#00f3ff'], threshold: 225, cooldown: 0.4, speed: 2.0 },
+            normal: { lanes: 3, keys: ['a', 's', 'd'], colors: ['#ff007f', '#00f3ff', '#b026ff'], threshold: 215, cooldown: 0.25, speed: 1.5 },
+            hard: { lanes: 4, keys: ['a', 's', 'd', 'f'], colors: ['#ff007f', '#00f3ff', '#b026ff', '#fbbf24'], threshold: 200, cooldown: 0.15, speed: 1.2 }
+        };
+
+        let currentDiff = 'easy'; // Default
+        let numLanes = DIFFICULTIES[currentDiff].lanes;
+        let activeKeys = DIFFICULTIES[currentDiff].keys;
+        let activeColors = DIFFICULTIES[currentDiff].colors;
+
+        // Game State
+        let isPlaying = false;
+        let score = 0;
+        let combo = 0;
+        let notes = [];
+        let particles = [];
+        let floatingTexts = [];
+        let lastTime = performance.now();
+        
+        // Configurazione Fisica Gioco
+        let fallTimeSeconds = DIFFICULTIES[currentDiff].speed;
+        let laneWidth = 0;
+        const hitZoneYOffset = 160; // Alzato per fare spazio ai bottoni
+        let hitZoneY = 0;
+        const noteHeight = 20;
+        let noteSpeed = 0;
+
+        // Web Audio API State
+        let audioCtx;
+        let audioSource;
+        let analyser;
+        let delayNode;
+        let audioDataBuffer = null; // Buffer per i dati audio raw (Fix per iOS/Safari)
+        
+        let lastSpawnTime = 0;
+        let beatThreshold = DIFFICULTIES[currentDiff].threshold; 
+        let spawnCooldown = DIFFICULTIES[currentDiff].cooldown;
+
+        function updateDifficultySettings() {
+            numLanes = DIFFICULTIES[currentDiff].lanes;
+            activeKeys = DIFFICULTIES[currentDiff].keys;
+            activeColors = DIFFICULTIES[currentDiff].colors;
+            fallTimeSeconds = DIFFICULTIES[currentDiff].speed;
+            beatThreshold = DIFFICULTIES[currentDiff].threshold;
+            spawnCooldown = DIFFICULTIES[currentDiff].cooldown;
+            
+            if (typeof delayNode !== 'undefined' && delayNode) {
+                delayNode.delayTime.value = fallTimeSeconds;
+            }
+            resize();
+            buildTouchControls();
+        }
+
+        function resize() {
+            const container = document.getElementById('game-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            bgCanvas.width = container.clientWidth;
+            bgCanvas.height = container.clientHeight;
+            
+            laneWidth = canvas.width / numLanes;
+            hitZoneY = canvas.height - hitZoneYOffset;
+            
+            noteSpeed = (hitZoneY + noteHeight) / fallTimeSeconds; 
+        }
+        window.addEventListener('resize', resize);
+
+        async function initAudio() {
+            // Inizializza Audio Context
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Decodifica i dati audio (questo funziona sempre su tutti i browser)
+            const audioBuffer = await audioCtx.decodeAudioData(audioDataBuffer.slice(0));
+            
+            audioSource = audioCtx.createBufferSource();
+            audioSource.buffer = audioBuffer;
+            
+            // Crea l'Analizzatore per estrarre le frequenze
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256; 
+            
+            delayNode = audioCtx.createDelay(5.0);
+            delayNode.delayTime.value = fallTimeSeconds;
+            
+            audioSource.connect(analyser);
+            analyser.connect(delayNode);
+            delayNode.connect(audioCtx.destination);
+            
+            audioSource.onended = () => {
+                endGame();
+            };
+            
+            // Avvia la riproduzione
+            audioSource.start(0);
+        }
+
+        class Note {
+            constructor(lane) {
+                this.lane = lane;
+                this.x = lane * laneWidth;
+                this.y = -noteHeight; // Spawna appena fuori dallo schermo in alto
+                this.color = activeColors[lane];
+                this.active = true;
+            }
+            update(dt) {
+                // Si muove a velocità costante calcolata per matchare l'audio delay
+                this.y += noteSpeed * dt;
+            }
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                
+                const margin = 8;
+                ctx.beginPath();
+                ctx.roundRect(this.x + margin, this.y, laneWidth - (margin*2), noteHeight, 4);
+                ctx.fill();
+                
+                // Effetto scia luminosa in alto
+                let gradient = ctx.createLinearGradient(0, this.y, 0, this.y - 60);
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(this.x + margin, this.y - 60, laneWidth - (margin*2), 60);
+                
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 300 + 100; // Esplosione veloce
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.size = Math.random() * 5 + 2;
+            }
+            update(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.vy += 500 * dt; // Gravità verso il basso
+                this.life -= dt * 2.0; // Svanisce veloce
+            }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        class FloatingText {
+            constructor(text, x, y, color) {
+                this.text = text;
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.life = 1.0;
+                this.vy = -100; 
+            }
+            update(dt) {
+                this.y += this.vy * dt;
+                this.life -= dt * 1.5;
+            }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.font = "bold 28px 'Orbitron'";
+                ctx.fillStyle = this.color;
+                ctx.textAlign = "center";
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function analyzeAudioAndSpawn() {
+            if(!analyser) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Analizziamo i bassi (frequenze basse, i primi bin dell'array)
+            let bassSum = 0;
+            // Prendiamo i bin da 1 a 5 (evitiamo lo 0 che spesso ha rumore di fondo continuo)
+            for(let i = 1; i <= 5; i++) {
+                bassSum += dataArray[i];
+            }
+            let bassAvg = bassSum / 5;
+
+            let now = audioCtx.currentTime;
+            
+            // Se l'energia dei bassi supera la soglia e è passato il cooldown
+            if (bassAvg > beatThreshold && now - lastSpawnTime > spawnCooldown) {
+                // Scegli una lane a caso per il blocco (dinamico)
+                const lane = Math.floor(Math.random() * numLanes);
+                notes.push(new Note(lane));
+                lastSpawnTime = now;
+            }
+            
+            // Disegniamo anche un EQ Visualizer sullo sfondo (Effetto Cyberpunk)
+            drawVisualizer(dataArray, bufferLength);
+        }
+
+        function drawVisualizer(dataArray, bufferLength) {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            
+            // Grid background
+            bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            bgCtx.lineWidth = 1;
+            bgCtx.beginPath();
+            for(let y = 0; y < bgCanvas.height; y += 40) { bgCtx.moveTo(0, y); bgCtx.lineTo(bgCanvas.width, y); }
+            bgCtx.stroke();
+
+            // EQ Bars dal basso
+            const barWidth = (bgCanvas.width / bufferLength) * 2.5;
+            let x = 0;
+            
+            for(let i = 0; i < bufferLength; i++) {
+                let barHeight = (dataArray[i] / 255) * bgCanvas.height * 0.5; // Max metà schermo
+                
+                // Colore sfumato in base alla frequenza
+                bgCtx.fillStyle = `rgba(${dataArray[i]}, 38, 255, 0.2)`; 
+                bgCtx.fillRect(x, bgCanvas.height - barHeight, barWidth, barHeight);
+                x += barWidth + 1;
+            }
+        }
+
+        function handleInput(laneIndex) {
+            if (!isPlaying) return;
+
+            // Flash effect sulla lane
+            ctx.fillStyle = activeColors[laneIndex];
+            ctx.globalAlpha = 0.15;
+            ctx.fillRect(laneIndex * laneWidth, 0, laneWidth, canvas.height);
+            ctx.globalAlpha = 1.0;
+
+            const laneNotes = notes.filter(n => n.lane === laneIndex && n.active);
+            
+            if (laneNotes.length > 0) {
+                // Prendi la nota più in basso
+                const targetNote = laneNotes.reduce((prev, curr) => (prev.y > curr.y) ? prev : curr);
+                
+                // Distanza dal centro della hit zone
+                const distance = Math.abs((targetNote.y + noteHeight/2) - hitZoneY);
+                const hitCenterX = targetNote.x + (laneWidth/2);
+                
+                // Margine di tolleranza calcolato in base alla velocità (circa 150ms di finestra temporale)
+                const perfectWindow = noteSpeed * 0.1; 
+                const goodWindow = noteSpeed * 0.25;
+
+                if (distance < perfectWindow) {
+                    registerHit(targetNote, 100, "PERFECT!", activeColors[laneIndex], hitCenterX);
+                } else if (distance < goodWindow) {
+                    registerHit(targetNote, 50, "GOOD", "#fff", hitCenterX);
+                } else if (distance < goodWindow * 1.5) {
+                    // Miss se premuto leggermente troppo presto/tardi
+                    breakCombo(targetNote, hitCenterX);
+                }
+            }
+        }
+
+        function registerHit(note, points, text, color, centerX) {
+            note.active = false; 
+            combo++;
+            score += points + (combo * 10); 
+            
+            // Esplosione Particelle
+            for(let i=0; i<20; i++) particles.push(new Particle(centerX, hitZoneY, color));
+            floatingTexts.push(new FloatingText(text, centerX, hitZoneY - 30, color));
+            
+            updateUI();
+        }
+
+        function breakCombo(note, xPos) {
+            combo = 0;
+            if(note) note.active = false;
+            floatingTexts.push(new FloatingText("MISS", xPos, hitZoneY + 20, "#ff0000"));
+            updateUI();
+        }
+
+        function updateUI() {
+            scoreEl.innerText = score;
+            comboEl.innerText = combo;
+            
+            if (combo > 50) comboEl.style.color = 'var(--neon-gold)';
+            else if (combo > 20) comboEl.style.color = 'var(--neon-cyan)';
+            else comboEl.style.color = 'var(--neon-pink)';
+        }
+
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+
+            const dt = (timestamp - lastTime) / 1000; // Delta time in secondi
+            lastTime = timestamp;
+
+            // Analizza Audio e Genera Note
+            analyzeAudioAndSpawn();
+
+            // Pulisci Canvas Gioco
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Disegna Linee di divisione dinamiche
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 2;
+            for(let i=1; i<numLanes; i++) {
+                ctx.beginPath(); ctx.moveTo(i * laneWidth, 0); ctx.lineTo(i * laneWidth, canvas.height); ctx.stroke();
+            }
+
+            // Disegna la Hit Zone
+            ctx.beginPath();
+            ctx.moveTo(0, hitZoneY);
+            ctx.lineTo(canvas.width, hitZoneY);
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.5)';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00f3ff';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Indicatori Tasti
+            ctx.font = "bold 20px 'Orbitron'";
+            ctx.textAlign = "center";
+            for(let i=0; i<numLanes; i++) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillText(activeKeys[i].toUpperCase(), (i * laneWidth) + (laneWidth/2), hitZoneY + 35);
+            }
+
+            // Update & Draw
+            notes.forEach(note => note.update(dt));
+            particles.forEach(p => p.update(dt));
+            floatingTexts.forEach(ft => ft.update(dt));
+
+            // Filtra e Check Miss (se supera il fondo schermo)
+            notes = notes.filter(note => {
+                if (note.y > canvas.height + noteHeight) {
+                    if (note.active) breakCombo(note, note.x + laneWidth/2);
+                    return false;
+                }
+                return note.active;
+            });
+            particles = particles.filter(p => p.life > 0);
+            floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+
+            notes.forEach(note => note.draw(ctx));
+            particles.forEach(p => p.draw(ctx));
+            floatingTexts.forEach(ft => ft.draw(ctx));
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        startBtn.addEventListener('click', async () => {
+            if (!currentSongPath) return;
+            
+            startBtn.disabled = true;
+            startBtn.innerText = "Scaricamento Traccia...";
+            startBtn.style.borderColor = "#555";
+            startBtn.style.boxShadow = "none";
+            
+            try {
+                // 1. Scarica il file audio dal tuo server (GitHub)
+                const response = await fetch(currentSongPath);
+                if (!response.ok) throw new Error("Canzone non trovata sul server!");
+                audioDataBuffer = await response.arrayBuffer();
+
+                // 2. Prepara l'audio
+                startBtn.innerText = "Preparazione Motore...";
+                await initAudio();
+                
+                // 3. Avvia gioco
+                startScreen.classList.add('hidden');
+                
+                score = 0; combo = 0; notes = []; particles = []; floatingTexts = [];
+                updateUI();
+                
+                isPlaying = true;
+                lastTime = performance.now();
+                requestAnimationFrame(gameLoop);
+            } catch (err) {
+                console.error(err);
+                alert("Errore caricamento: " + err.message + "\nAssicurati che la cartella 'audio' esista e i nomi siano corretti.");
+                startBtn.disabled = false;
+                startBtn.innerText = "Riprova Show";
+                startBtn.style.borderColor = "var(--neon-cyan)";
+            }
+        });
+
+        function endGame() {
+            isPlaying = false;
+            if(audioSource) audioSource.stop();
+            startScreen.querySelector('h1').innerText = "LIVE FINITO";
+            startScreen.querySelector('.subtitle').innerText = `Score Finale: ${score}`;
+            startBtn.innerText = "Gioca di nuovo";
+            startBtn.disabled = false; 
+            startBtn.style.borderColor = "var(--neon-cyan)";
+            startBtn.style.boxShadow = "0 0 15px rgba(0, 243, 255, 0.5)";
+            audioDataBuffer = null;
+            startScreen.classList.remove('hidden');
+        }
+
+        // --- GESTIONE DIFFICOLTA' ---
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentDiff = e.target.dataset.diff;
+                updateDifficultySettings();
+            });
+        });
+
+        // --- COSTRUZIONE CONTROLLI TOUCH & HINTS ---
+        function buildTouchControls() {
+            const touchContainer = document.getElementById('touch-controls');
+            const hintsContainer = document.getElementById('key-hints-container');
+            
+            if(touchContainer) touchContainer.innerHTML = '';
+            if(hintsContainer) hintsContainer.innerHTML = '';
+
+            for(let i = 0; i < numLanes; i++) {
+                // Tasto Touch in basso
+                const btn = document.createElement('div');
+                btn.className = 'lane-btn';
+                btn.style.borderColor = activeColors[i];
+                btn.style.color = activeColors[i];
+                btn.innerText = activeKeys[i].toUpperCase();
+                
+                const trigger = (e) => {
+                    e.preventDefault();
+                    if (!isPlaying) return;
+                    handleInput(i);
+                    // Effetto visivo pressione per touch
+                    btn.style.background = 'rgba(255,255,255,0.2)';
+                    setTimeout(() => btn.style.background = 'rgba(20, 20, 31, 0.8)', 100);
+                };
+                
+                btn.addEventListener('touchstart', trigger, {passive: false});
+                btn.addEventListener('mousedown', trigger); // Funziona anche col click del mouse!
+                if(touchContainer) touchContainer.appendChild(btn);
+
+                // Hint nello schermo di start
+                const hint = document.createElement('span');
+                hint.className = 'key-btn';
+                hint.style.borderColor = activeColors[i];
+                hint.style.color = activeColors[i];
+                hint.innerText = activeKeys[i].toUpperCase();
+                if(hintsContainer) hintsContainer.appendChild(hint);
+            }
+        }
+        
+        // Costruisci lista canzoni a schermo
+        function buildSongList() {
+            const container = document.getElementById('song-list');
+            if(!container) return;
+            container.innerHTML = '';
+            
+            SONGS.forEach((song, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'song-btn';
+                if(index === 0) btn.classList.add('active'); // La prima è selezionata
+                btn.innerText = song.title;
+                
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.song-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentSongPath = song.path;
+                });
+                
+                container.appendChild(btn);
+            });
+        }
+
+        // Inizializza i controlli al caricamento della pagina
+        updateDifficultySettings();
+        buildSongList();
+
+        // Eventi Input Tastiera
+        window.addEventListener('keydown', (e) => {
+            if (!isPlaying || e.repeat) return;
+            const laneIndex = activeKeys.indexOf(e.key.toLowerCase());
+            if (laneIndex !== -1) handleInput(laneIndex);
+        });
+
+    </script>
+</body>
+</html>
